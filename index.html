@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Powertrain Engineering Learning Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; font: 15px/1.45 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; color: #0f172a; background: #f1f5f9; }
+  body.busy { cursor: progress; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 clamp(12px, 3vw, 24px); }
+  header.top { background: #0b1f3a; color: #fff; padding: 18px 0 14px; border-bottom: 4px solid #0d9488; }
+  h1 { margin: 0; font-size: clamp(1.15rem, 2.6vw, 1.6rem); }
+  h2 { margin: 0 0 12px; font-size: 1.1rem; }
+  h3 { margin: 0 0 8px; font-size: 1rem; }
+  .meta { margin: 6px 0 12px; font-size: .85rem; color: #cbd5e1; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  .meta span { overflow-wrap: anywhere; }
+  .meta b { color: #fff; font-weight: 600; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .toolbar label { display: flex; align-items: center; gap: 6px; }
+  select, input[type="search"] { font: inherit; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #0f172a; width: 100%; min-width: 0; max-width: 100%; }
+  .toolbar select { width: auto; }
+  /* In-page picker so long option lists scroll inside the window instead of overflowing it */
+  @supports (appearance: base-select) {
+    select, select::picker(select) { appearance: base-select; }
+    select { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
+    select::picker(select) {
+      color: #0f172a; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 0;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, .18); max-height: min(320px, 50vh); max-width: calc(100vw - 16px);
+      overflow-y: auto; position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+    }
+    select option { padding: 6px 12px; white-space: normal; overflow-wrap: anywhere; }
+    select option:hover, select option:focus-visible { background: #f1f5f9; }
+    select option:checked { background: #ccfbf1; font-weight: 600; }
+    select optgroup { font-weight: 600; color: #475569; }
+  }
+  button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #0d9488; background: #0d9488; color: #fff; cursor: pointer; }
+  button.ghost { background: #fff; color: #0f766e; }
+  button[aria-pressed="true"] { background: #0f766e; color: #fff; }
+  button:disabled, select:disabled, input:disabled { opacity: .55; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+  .status { font-size: .85rem; color: #99f6e4; }
+  .live { margin: 10px 0 0; min-height: 1.2em; font-size: .85rem; color: #475569; }
+  section, details.card { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(15,23,42,.1); padding: clamp(12px, 2.5vw, 20px); margin: 14px 0; min-width: 0; }
+  .hint { margin: -6px 0 12px; font-size: .85rem; color: #475569; }
+  .error { border-left: 5px solid #dc2626; }
+  .error code { background: #f1f5f9; padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr)); gap: 12px; }
+  .kpi { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; min-width: 0; }
+  .kpi .label { font-size: .8rem; color: #475569; }
+  .kpi .value { font-size: 1.4rem; font-weight: 600; overflow-wrap: anywhere; }
+  .kpi .sub { font-size: .8rem; color: #475569; overflow-wrap: anywhere; }
+  .meter { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+  .meter > span { display: block; height: 100%; background: #0d9488; }
+  .sec-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .sec-head h2 { margin: 0; }
+  .prow { border: 1px solid #e2e8f0; border-left: 6px solid #94a3b8; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .prow-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .prow-head strong { flex: 1; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .icon { width: 32px; height: 32px; padding: 0; font-size: 1.2rem; line-height: 1; }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 8px 12px; }
+  .field { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: .85rem; }
+  .field .err { color: #b91c1c; font-size: .8rem; }
+  .bars { margin-top: 16px; }
+  .bar { margin-bottom: 14px; }
+  .bar-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-size: .9rem; }
+  .bar-top .name { font-weight: 600; overflow-wrap: anywhere; }
+  .badge { display: inline-block; font-size: .75rem; padding: 1px 8px; border-radius: 10px; color: #fff; margin-left: 6px; }
+  .track { position: relative; height: 22px; background: #eef2f7; border-radius: 4px; margin-top: 4px; }
+  .fill { height: 100%; border-radius: 4px; }
+  .target { position: absolute; top: -4px; bottom: -4px; border-left: 2px dashed #0f172a; }
+  .bar-sub { font-size: .8rem; color: #475569; margin-top: 3px; overflow-wrap: anywhere; }
+  .legend { font-size: .8rem; color: #475569; }
+  .empty { color: #64748b; font-style: italic; }
+  .tl-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .tl-tools input { flex: 1 1 200px; width: auto; }
+  .tl-year { border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 12px; }
+  .tl-year ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 8px; }
+  .tl-item { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  .tl-item .t { font-weight: 600; overflow-wrap: anywhere; }
+  .tl-item .s { font-size: .8rem; color: #475569; overflow-wrap: anywhere; }
+  .tl-year > button { margin-top: 8px; }
+  details.card summary { cursor: pointer; font-weight: 600; }
+  .dq h3 { margin-top: 14px; font-size: .9rem; }
+  .dq ul { margin: 4px 0; padding-left: 20px; font-size: .85rem; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>Powertrain Engineering Learning Dashboard</h1>
+    <div class="meta" id="meta"></div>
+    <div class="toolbar">
+      <label for="yearSel">Year <select id="yearSel"><option value="__all__">All Years</option></select></label>
+      <button id="refreshBtn" type="button">Refresh data</button>
+      <button id="pickBtn" type="button" class="ghost">Select workbook…</button>
+      <input id="fileInput" type="file" accept=".xlsx" hidden>
+      <span id="busy" class="status" hidden>Loading workbook…</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <p id="live" class="live" aria-live="polite"></p>
+  <section id="errorBox" class="error" role="alert" hidden></section>
+
+  <div id="content" hidden>
+    <section aria-labelledby="kpiTitle">
+      <h2 id="kpiTitle">Learning summary</h2>
+      <p class="hint" id="kpiScope"></p>
+      <div class="kpis" id="kpis"></div>
+    </section>
+
+    <section aria-labelledby="cmpTitle">
+      <div class="sec-head">
+        <h2 id="cmpTitle">Compare team learning</h2>
+        <button id="addBtn" type="button" aria-label="Add person" title="Add person">+ Add person</button>
+      </div>
+      <div id="rows"></div>
+      <div class="bars" id="bars"></div>
+    </section>
+
+    <section aria-labelledby="tlTitle">
+      <h2 id="tlTitle">Training conducted by year</h2>
+      <div class="tl-tools">
+        <div class="toolbar" id="tlTypes" role="group" aria-label="Training type"></div>
+        <input id="tlSearch" type="search" placeholder="Search training or sub topic" aria-label="Search training or sub topic">
+      </div>
+      <div id="timeline"></div>
+    </section>
+
+    <details class="card dq" id="dq">
+      <summary id="dqSummary">Data quality</summary>
+      <div id="dqBody"></div>
+    </details>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+/* ================= CONFIGURATION ================= */
+// Browsers cannot read a C:\ path directly: when served over http the page loads the same-named file
+// next to this HTML; when opened from disk use "Select workbook…".
+const BACKEND_WORKBOOK_PATH = String.raw`C:\Users\AKRUTHI\Downloads\copilot_dashboard\Powertrain engineering Learning Tracker_V2_20261120_k18.1.xlsx`;
+
+const CONFIG = {
+  mainSheet: "Efficiency measures _Summary",
+  trainingListSheet: "Sheet1",
+  employeeSheet: "Employees",
+  headerRow: 3,
+  firstDataRow: 5,
+  firstEmployeeColumn: "I",
+  trainingListColumn: "B",
+  trainingListFirstRow: 2,
+  employeeRow: 2,
+  employeeFirstColumn: "B",
+  headers: {
+    slNo: "Sl_No", method: "Method", training: "Training/Learning", subTopic: "Sub Topic",
+    trainer: "Trainer name (if internal)", year: "Year", remarks: "Remarks", total: "TOTAL LEARNING (In Hours)",
+  },
+  requiredHeaders: ["method", "training", "subTopic", "year"],
+  targetHours: 40,
+  maxPeople: 4,
+  colors: ["#2563EB", "#7C3AED", "#16A34A", "#EAB308"],
+  belowTargetColor: "#DC2626",
+  noYearLabel: "Year not specified",
+  blankLabel: "Not specified",
+  timelineCollapsedCount: 8,
+  // A record matches when Method or Training/Learning contains `match` and `field` equals one of `equals`.
+  kpiCategories: [
+    { label: "BTV Training – Batch 1", match: "BTV", field: "training", equals: ["Batch 1"] },
+    { label: "BTV Training – Batch 2", match: "BTV", field: "training", equals: ["Batch 2"] },
+    { label: "PLATON Readiness – Basic", match: "PLATON", field: "subTopic", equals: ["Basic", "Basics"] },
+    { label: "PLATON Readiness – Advanced", match: "PLATON", field: "subTopic", equals: ["Advanced"] },
+  ],
+  // Checked in order; anything unmatched is "Other/Unclassified".
+  trainingTypes: {
+    Behavioral: { methods: ["HR"], trainingContains: ["Behavioral", "Behavioural"] },
+    Technical: { methods: ["TecCom", "Product Hands On learning", "Focus competency group", "PLATON", "BTV training", "External Training", "Internal training", "Upskilling"] },
+  },
+};
+/* ================================================= */
+
+const ALL = "__all__";
+const OTHER_TYPE = "Other/Unclassified";
+const $ = id => document.getElementById(id);
+const norm = s => String(s ?? "").replace(/\s+/g, " ").trim();
+const key = s => norm(s).toLowerCase();
+const fmt = n => (Number.isFinite(n) ? n : 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const pct = (a, b) => (b > 0 ? (a / b) * 100 : 0);
+const fmtDate = d => (d instanceof Date && !isNaN(d) ? d.toLocaleString() : "Not available");
+const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+
+class WbError extends Error {
+  constructor(message, opts = {}) { super(message); this.detail = opts.detail; this.pick = opts.pick; }
+}
+
+function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else if (k === "style") e.style.cssText = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (typeof v === "boolean") e[k] = v;
+    else e.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : String(c));
+  return e;
+}
+
+function colIndex(letters) { let n = 0; for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64); return n; }
+function colName(n) { let s = ""; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+
+/* ---------- Minimal read-only .xlsx reader (zip + XML) ---------- */
+async function unzip(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf), td = new TextDecoder();
+  let eocd = -1;
+  for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65557); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new WbError("The file is not a valid .xlsx workbook. It may be corrupt or still being saved — try Refresh data again.");
+  const count = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const entries = new Map();
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new WbError("The workbook file structure is damaged.");
+    const nameLen = dv.getUint16(p + 28, true), extraLen = dv.getUint16(p + 30, true), commentLen = dv.getUint16(p + 32, true);
+    entries.set(td.decode(u8.subarray(p + 46, p + 46 + nameLen)), {
+      method: dv.getUint16(p + 10, true), size: dv.getUint32(p + 20, true), offset: dv.getUint32(p + 42, true),
+    });
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+  return {
+    async xml(name) {
+      const e = entries.get(name);
+      if (!e) return null;
+      const start = e.offset + 30 + dv.getUint16(e.offset + 26, true) + dv.getUint16(e.offset + 28, true);
+      let data = u8.subarray(start, start + e.size);
+      if (e.method === 8) {
+        if (typeof DecompressionStream === "undefined") throw new WbError("This browser cannot read .xlsx files. Use a current version of Edge, Chrome or Firefox.");
+        data = new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+      } else if (e.method !== 0) throw new WbError("The workbook uses an unsupported compression format.");
+      const doc = new DOMParser().parseFromString(td.decode(data), "application/xml");
+      if (doc.getElementsByTagName("parsererror").length) throw new WbError(`The workbook part "${name}" is corrupt.`);
+      return doc;
+    },
+  };
+}
+
+const tags = (node, name) => Array.from(node.getElementsByTagNameNS("*", name));
+const child = (node, name) => Array.from(node.children).find(c => c.localName === name) || null;
+
+async function readWorkbook(buf) {
+  const zip = await unzip(buf);
+  const wb = await zip.xml("xl/workbook.xml");
+  if (!wb) throw new WbError("The file is not a valid .xlsx workbook.");
+  const relsDoc = await zip.xml("xl/_rels/workbook.xml.rels");
+  const rels = {};
+  if (relsDoc) for (const r of tags(relsDoc, "Relationship")) rels[r.getAttribute("Id")] = r.getAttribute("Target");
+  const sheets = new Map();
+  for (const s of tags(wb, "sheet")) {
+    const rid = s.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id") || s.getAttribute("r:id");
+    const target = rels[rid];
+    if (target) sheets.set(s.getAttribute("name"), target.startsWith("/") ? target.slice(1) : "xl/" + target.replace(/^\.\//, ""));
+  }
+  const sstDoc = await zip.xml("xl/sharedStrings.xml");
+  const sst = sstDoc ? tags(sstDoc, "si").map(si => tags(si, "t").filter(t => t.parentNode.localName !== "rPh").map(t => t.textContent).join("")) : [];
+  return {
+    names: [...sheets.keys()],
+    async sheet(name) {
+      const path = sheets.get(name);
+      return path ? parseSheet(await zip.xml(path), sst) : null;
+    },
+  };
+}
+
+function parseSheet(doc, sst) {
+  if (!doc) return null;
+  const rows = new Map();
+  let maxRow = 0, maxCol = 0;
+  for (const c of tags(doc, "c")) {
+    const m = /^([A-Z]+)(\d+)$/.exec(c.getAttribute("r") || "");
+    if (!m) continue;
+    const t = c.getAttribute("t"), vEl = child(c, "v"), hasFormula = !!child(c, "f");
+    let v = null;
+    if (t === "inlineStr") v = tags(c, "t").map(x => x.textContent).join("");
+    else if (vEl) {
+      const raw = vEl.textContent;
+      if (t === "s") v = sst[Number(raw)] ?? "";
+      else if (t === "str") v = raw;
+      else if (t === "b") v = raw === "1";
+      else if (t === "e") v = { error: raw };
+      else { const n = Number(raw); v = raw.trim() !== "" && Number.isFinite(n) ? n : raw; }
+    }
+    if (v === null && !hasFormula) continue;
+    const row = Number(m[2]), col = colIndex(m[1]);
+    if (!rows.has(row)) rows.set(row, new Map());
+    rows.get(row).set(col, { v, f: hasFormula, ref: m[0] });
+    if (row > maxRow) maxRow = row;
+    if (col > maxCol) maxCol = col;
+  }
+  return { maxRow, maxCol, get: (r, c) => rows.get(r)?.get(c) || null };
+}
+
+const cellText = cell => (!cell || cell.v == null || typeof cell.v === "object" ? "" : norm(cell.v));
+
+/* ---------- Normalised model ---------- */
+function buildModel(main, empSheet, listSheet) {
+  const dq = {
+    rosterMissing: [], notInRoster: [], duplicates: [], invalid: [], negative: [], noCache: [],
+    missingYear: [], missingMethod: [], missingTraining: [], notInList: [], unmatchedHeaders: [], emptyRows: 0,
+  };
+  const firstEmp = colIndex(CONFIG.firstEmployeeColumn);
+
+  const col = {};
+  const wanted = Object.entries(CONFIG.headers).map(([k, h]) => [k, key(h)]);
+  for (let c = 1; c < firstEmp; c++) {
+    const h = key(cellText(main.get(CONFIG.headerRow, c)));
+    const hit = wanted.find(([k, w]) => w === h && !col[k]);
+    if (hit) col[hit[0]] = c;
+  }
+  const missingReq = CONFIG.requiredHeaders.filter(k => !col[k]).map(k => `"${CONFIG.headers[k]}"`);
+  if (missingReq.length) {
+    throw new WbError(`Missing expected header(s) in row ${CONFIG.headerRow} of worksheet "${CONFIG.mainSheet}": ${missingReq.join(", ")}.`);
+  }
+  for (const [k] of wanted) if (!col[k]) dq.unmatchedHeaders.push(`"${CONFIG.headers[k]}" not found in row ${CONFIG.headerRow}`);
+
+  const people = [], byKey = new Map();
+  const person = name => {
+    const k = key(name);
+    if (!byKey.has(k)) { const p = { id: people.length, name, key: k, inRoster: false, inSheet: false, hasHours: false }; people.push(p); byKey.set(k, p); }
+    return byKey.get(k);
+  };
+
+  const rosterSeen = new Set();
+  for (let c = colIndex(CONFIG.employeeFirstColumn); c <= empSheet.maxCol; c++) {
+    const cell = empSheet.get(CONFIG.employeeRow, c);
+    const name = cellText(cell);
+    if (!name) continue;
+    if (rosterSeen.has(key(name))) { dq.duplicates.push(`${name} (Employees sheet, cell ${cell.ref})`); continue; }
+    rosterSeen.add(key(name));
+    person(name).inRoster = true;
+  }
+
+  const empCols = [], headSeen = new Set();
+  for (let c = firstEmp; ; c++) {
+    const name = cellText(main.get(CONFIG.headerRow, c));
+    if (!name) break;
+    if (headSeen.has(key(name))) dq.duplicates.push(`${name} (main sheet column ${colName(c)}; hours merged)`);
+    headSeen.add(key(name));
+    const p = person(name);
+    p.inSheet = true;
+    empCols.push([c, p.id]);
+  }
+  if (!empCols.length) {
+    throw new WbError(`No employee names found in row ${CONFIG.headerRow} of worksheet "${CONFIG.mainSheet}" starting at column ${CONFIG.firstEmployeeColumn}.`);
+  }
+
+  const listKeys = new Set();
+  if (listSheet) {
+    for (let r = CONFIG.trainingListFirstRow; r <= listSheet.maxRow; r++) {
+      const t = key(cellText(listSheet.get(r, colIndex(CONFIG.trainingListColumn))));
+      if (t) listKeys.add(t);
+    }
+  } else dq.unmatchedHeaders.push(`Worksheet "${CONFIG.trainingListSheet}" not found (training list check skipped)`);
+
+  const records = [], notInList = new Set();
+  for (let r = CONFIG.firstDataRow; r <= main.maxRow; r++) {
+    const get = k => (col[k] ? cellText(main.get(r, col[k])) : "");
+    const method = get("method"), training = get("training"), subTopic = get("subTopic");
+    const hours = new Map();
+    for (const [c, pid] of empCols) {
+      const h = parseHours(main.get(r, c), dq);
+      if (h > 0) hours.set(pid, (hours.get(pid) || 0) + h);
+    }
+    if (!method && !training && !subTopic && !hours.size) { dq.emptyRows++; continue; }
+
+    let year = yearOf(main.get(r, col.year));
+    if (!year) { year = CONFIG.noYearLabel; dq.missingYear.push(`Row ${r}`); }
+    if (!method) dq.missingMethod.push(`Row ${r}`);
+    if (!training) dq.missingTraining.push(`Row ${r}`);
+    if (training && listKeys.size && !listKeys.has(key(training))) notInList.add(training);
+    for (const pid of hours.keys()) people[pid].hasHours = true;
+
+    records.push({ row: r, method, training, subTopic, year, hours, k: { method: key(method), training: key(training), subTopic: key(subTopic) } });
+  }
+  dq.notInList = [...notInList];
+  dq.rosterMissing = people.filter(p => p.inRoster && !p.inSheet).map(p => `${p.name} (shown with 0.00 hours)`);
+  dq.notInRoster = people.filter(p => p.inSheet && !p.inRoster).map(p => p.name + (p.hasHours ? "" : " (no hours)"));
+
+  const years = [...new Set(records.map(r => r.year))].sort((a, b) => {
+    if (a === CONFIG.noYearLabel) return 1;
+    if (b === CONFIG.noYearLabel) return -1;
+    const na = Number(a), nb = Number(b);
+    return Number.isFinite(na) && Number.isFinite(nb) ? nb - na : a.localeCompare(b);
+  });
+  return { people, byKey, records, years, dq };
+}
+
+function parseHours(cell, dq) {
+  if (!cell) return 0;
+  const v = cell.v;
+  if (v == null) { if (cell.f) dq.noCache.push(cell.ref); return 0; }
+  let n;
+  if (typeof v === "number") n = v;
+  else if (typeof v === "string") {
+    const s = norm(v);
+    if (!s) return 0;
+    n = Number(s);
+    if (!Number.isFinite(n)) { dq.invalid.push(`${cell.ref}: "${s}"`); return 0; }
+  } else { dq.invalid.push(`${cell.ref}: ${v.error || String(v)}`); return 0; }
+  if (n < 0) { dq.negative.push(`${cell.ref}: ${n}`); return 0; }
+  return n;
+}
+
+function yearOf(cell) {
+  if (!cell || cell.v == null || typeof cell.v === "object") return "";
+  if (typeof cell.v === "number") return String(Number.isInteger(cell.v) ? cell.v : cell.v);
+  const s = norm(cell.v);
+  return /^\d+(\.0+)?$/.test(s) ? String(parseInt(s, 10)) : s;
+}
+
+/* ---------- Loading ---------- */
+const state = {
+  model: null, meta: null, source: null, busy: false, year: ALL, recs: [],
+  rows: [newRow()], tlType: "All", tlSearch: "", tlOpen: new Set(),
+};
+function newRow() { return { p: "", method: ALL, training: ALL, subTopic: ALL, hours: ALL }; }
+
+function workbookUrl() {
+  const p = BACKEND_WORKBOOK_PATH.trim().replace(/\\/g, "/");
+  const isAbsolute = /^[a-zA-Z]:\//.test(p) || p.startsWith("//");
+  const rel = isAbsolute ? p.split("/").pop() : p;
+  return new URL(rel.split("/").map(encodeURIComponent).join("/"), location.href).href;
+}
+
+async function acquire() {
+  if (state.source?.handle) {
+    const h = state.source.handle;
+    try {
+      if (h.queryPermission && (await h.queryPermission({ mode: "read" })) !== "granted") await h.requestPermission({ mode: "read" });
+      const f = await h.getFile();
+      return { buf: await f.arrayBuffer(), name: f.name, modified: new Date(f.lastModified) };
+    } catch {
+      state.source = null;
+      throw new WbError("The browser no longer allows reading the selected workbook. Click \"Select workbook…\" and choose it again.", { pick: true });
+    }
+  }
+  if (state.source?.file) {
+    const f = state.source.file;
+    try { return { buf: await f.arrayBuffer(), name: f.name, modified: new Date(f.lastModified) }; }
+    catch { state.source = null; throw new WbError("The selected workbook changed on disk. Select it again to load the latest version.", { pick: true }); }
+  }
+  if (location.protocol === "file:") {
+    throw new WbError("This page was opened directly from disk, so the browser does not allow it to read the workbook automatically. Click \"Select workbook…\" and choose the file.", { pick: true });
+  }
+  let res;
+  try { res = await fetch(workbookUrl(), { cache: "no-store" }); }
+  catch { throw new WbError("The workbook could not be requested. Check that the local web server is still running.", { pick: true }); }
+  if (res.status === 404) throw new WbError("Workbook not found next to this page.", { pick: true, detail: `Looked for: ${decodeURIComponent(new URL(workbookUrl()).pathname)}` });
+  if (!res.ok) throw new WbError(`The workbook could not be read (HTTP ${res.status}). It may be locked while being saved — try Refresh data again.`, { pick: true });
+  const lm = res.headers.get("Last-Modified");
+  return { buf: await res.arrayBuffer(), name: decodeURIComponent(new URL(res.url).pathname.split("/").pop()), modified: lm ? new Date(lm) : null };
+}
+
+async function load() {
+  if (state.busy) return;
+  setBusy(true);
+  announce("Reading workbook…");
+  try {
+    const { buf, name, modified } = await acquire();
+    const wb = await readWorkbook(buf);
+    for (const s of [CONFIG.mainSheet, CONFIG.employeeSheet]) {
+      if (!wb.names.includes(s)) throw new WbError(`Worksheet "${s}" was not found in the workbook.`, { detail: `Available worksheets: ${wb.names.join(", ") || "none"}` });
+    }
+    const model = buildModel(await wb.sheet(CONFIG.mainSheet), await wb.sheet(CONFIG.employeeSheet), await wb.sheet(CONFIG.trainingListSheet));
+    state.model = model;
+    state.meta = { name, modified, refreshed: new Date() };
+    if (state.year !== ALL && !model.years.includes(state.year)) state.year = ALL;
+    $("errorBox").hidden = true;
+    $("content").hidden = false;
+    renderYearSelect();
+    renderDataQuality();
+    renderAll();
+    announce(`Data refreshed at ${state.meta.refreshed.toLocaleTimeString()}.`);
+  } catch (e) {
+    if (!(e instanceof WbError)) console.error(e);
+    showError(e);
+    announce("Workbook could not be loaded.");
+  } finally {
+    setBusy(false);
+    if (state.model) renderCompare();
+  }
+}
+
+function setBusy(b) {
+  state.busy = b;
+  document.body.classList.toggle("busy", b);
+  $("busy").hidden = !b;
+  document.querySelectorAll("button, select, input").forEach(x => { x.disabled = b; });
+}
+
+function announce(msg) { $("live").textContent = msg; }
+
+function showError(e) {
+  const box = $("errorBox");
+  const msg = e instanceof WbError ? e.message : "The workbook could not be read. It may be corrupt or still being saved — try Refresh data again.";
+  box.replaceChildren(...[
+    el("h2", { text: "Unable to load workbook" }),
+    el("p", { text: msg }),
+    e.detail ? el("p", { text: e.detail }) : null,
+    el("p", {}, "Expected workbook (BACKEND_WORKBOOK_PATH): ", el("code", { text: BACKEND_WORKBOOK_PATH })),
+    e.pick ? el("p", { class: "hint", text: "Tip: to load it automatically, place this page in the workbook folder, run \"python -m http.server 8000\" there and open http://127.0.0.1:8000/index_v.1.0.html." }) : null,
+  ].filter(Boolean));
+  box.hidden = false;
+  renderMeta();
+}
+
+async function pickWorkbook() {
+  if (window.showOpenFilePicker) {
+    try {
+      const [handle] = await window.showOpenFilePicker({ types: [{ description: "Excel workbook", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] });
+      state.source = { handle };
+      load();
+    } catch (e) { if (e.name !== "AbortError") showError(e); }
+  } else $("fileInput").click();
+}
+
+/* ---------- Rendering ---------- */
+function renderAll() {
+  state.recs = state.year === ALL ? state.model.records : state.model.records.filter(r => r.year === state.year);
+  renderMeta();
+  renderKpis();
+  renderCompare();
+  renderTimeline();
+}
+
+function renderMeta() {
+  const m = state.meta;
+  const item = (label, value) => el("span", {}, `${label}: `, el("b", { text: value }));
+  $("meta").replaceChildren(
+    item("Workbook", m?.name || "Not loaded"),
+    item("Modified", fmtDate(m?.modified)),
+    item("Refreshed", fmtDate(m?.refreshed)),
+    item("Year", state.year === ALL ? "All years" : state.year),
+    item("Learning target", `${fmt(CONFIG.targetHours)} hours`),
+  );
+}
+
+function renderYearSelect() {
+  const sel = $("yearSel");
+  sel.replaceChildren(new Option("All Years", ALL), ...state.model.years.map(y => new Option(y, y)));
+  sel.value = state.year;
+}
+
+function totalsFor(recs) {
+  const t = new Map();
+  for (const r of recs) for (const [pid, h] of r.hours) t.set(pid, (t.get(pid) || 0) + h);
+  return t;
+}
+
+function renderKpis() {
+  const roster = state.model.people.filter(p => p.inRoster);
+  const rosterIds = new Set(roster.map(p => p.id));
+  const totals = totalsFor(state.recs);
+  const n = roster.length;
+  const total = roster.reduce((s, p) => s + (totals.get(p.id) || 0), 0);
+  const atTarget = roster.filter(p => (totals.get(p.id) || 0) >= CONFIG.targetHours).length;
+
+  const card = (label, value, sub, meter) => el("div", { class: "kpi" },
+    el("div", { class: "label", text: label }),
+    el("div", { class: "value", text: value }),
+    sub ? el("div", { class: "sub", text: sub }) : null,
+    meter != null ? el("div", { class: "meter", role: "img", "aria-label": `${fmt(meter)}%` }, el("span", { style: `width:${Math.min(100, Math.max(0, meter))}%` })) : null,
+  );
+
+  const cards = [
+    card("Total Employees", String(n), `From "${CONFIG.employeeSheet}" sheet`),
+    card("Total Learning Hours", fmt(total), "hours"),
+    card("Average Hours per Employee", fmt(n ? total / n : 0), "hours"),
+    card(`At or above ${CONFIG.targetHours} hours`, String(atTarget), `${fmt(pct(atTarget, n))}% of employees`, pct(atTarget, n)),
+    card(`Below ${CONFIG.targetHours} hours`, String(n - atTarget), `${fmt(pct(n - atTarget, n))}% of employees`, pct(n - atTarget, n)),
+  ];
+  for (const cat of CONFIG.kpiCategories) {
+    const m = key(cat.match), eq = cat.equals.map(key);
+    const recs = state.recs.filter(r => (r.k.method.includes(m) || r.k.training.includes(m)) && eq.includes(r.k[cat.field]));
+    const who = new Set();
+    let hrs = 0;
+    for (const r of recs) for (const [pid, h] of r.hours) if (rosterIds.has(pid)) { who.add(pid); hrs += h; }
+    const p = pct(who.size, n);
+    cards.push(card(cat.label, `${who.size} / ${n}`, `${fmt(hrs)} hours · ${fmt(p)}% participation`, p));
+  }
+  $("kpis").replaceChildren(...cards);
+
+  const extra = state.model.people.filter(p => !p.inRoster && p.hasHours).length;
+  $("kpiScope").textContent = `Totals cover the ${n} employees in the "${CONFIG.employeeSheet}" sheet` +
+    (extra ? `; ${extra} other people with hours in the main sheet are available in Compare and listed under Data quality.` : ".");
+}
+
+function distinctText(recs, f) {
+  const m = new Map();
+  for (const r of recs) if (!m.has(r.k[f])) m.set(r.k[f], r[f] || CONFIG.blankLabel);
+  return [...m].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function evalRow(row) {
+  const p = state.model.byKey.get(row.p);
+  const res = { p, opts: { method: [], training: [], subTopic: [], hours: [] }, total: 0, overall: 0, items: 0 };
+  if (!p) { Object.assign(row, newRow()); return res; }
+  const sum = list => list.reduce((s, r) => s + r.hours.get(p.id), 0);
+  let recs = state.recs.filter(r => r.hours.has(p.id));
+  res.overall = sum(recs);
+  for (const f of ["method", "training", "subTopic"]) {
+    res.opts[f] = distinctText(recs, f);
+    if (row[f] !== ALL && !res.opts[f].some(o => o.value === row[f])) row[f] = ALL;
+    if (row[f] !== ALL) recs = recs.filter(r => r.k[f] === row[f]);
+  }
+  const hv = [...new Set(recs.map(r => r.hours.get(p.id).toFixed(2)))].sort((a, b) => a - b);
+  res.opts.hours = hv.map(v => ({ value: v, label: fmt(Number(v)) }));
+  if (row.hours !== ALL && !hv.includes(row.hours)) row.hours = ALL;
+  if (row.hours !== ALL) recs = recs.filter(r => r.hours.get(p.id).toFixed(2) === row.hours);
+  res.total = sum(recs);
+  res.items = recs.length;
+  return res;
+}
+
+const colorFor = (i, total) => (total < CONFIG.targetHours ? CONFIG.belowTargetColor : CONFIG.colors[i % CONFIG.colors.length]);
+const statusFor = total => (total < CONFIG.targetHours ? `Below ${CONFIG.targetHours}-hour target` : "Target achieved");
+
+function field(id, label, control, error) {
+  return el("div", { class: "field" }, el("label", { for: id, text: label }), control,
+    error ? el("span", { class: "err", id: `${id}-err`, text: error }) : null);
+}
+
+function renderCompare() {
+  const focusId = document.activeElement?.id;
+  const eligible = state.model.people.filter(p => p.inRoster || p.hasHours).sort(byName);
+  const results = state.rows.map((row, i) => ({ row, i, ...evalRow(row) }));
+  const multi = state.rows.length > 1;
+
+  $("rows").replaceChildren(...results.map(({ row, i, p, opts, total }) => {
+    const color = p ? colorFor(i, total) : "#94a3b8";
+    const taken = new Set(state.rows.filter((_, j) => j !== i).map(r => r.p));
+    const nameSel = el("select", {
+      id: `r${i}-p`, required: true, disabled: state.busy, "aria-required": "true", "aria-invalid": p ? "false" : "true",
+      "aria-describedby": p ? null : `r${i}-p-err`, onchange: e => { row.p = e.target.value; renderCompare(); },
+    });
+    nameSel.add(new Option("Select employee…", ""));
+    const add = (parent, list) => list.filter(x => !taken.has(x.key)).forEach(x => parent.append(new Option(x.name, x.key)));
+    const others = eligible.filter(x => !x.inRoster);
+    if (others.length) {
+      const g1 = el("optgroup", { label: `${CONFIG.employeeSheet} sheet` }), g2 = el("optgroup", { label: "Main sheet only" });
+      add(g1, eligible.filter(x => x.inRoster)); add(g2, others);
+      nameSel.append(g1, g2);
+    } else add(nameSel, eligible);
+    nameSel.value = row.p;
+
+    const filter = (f, label) => {
+      const s = el("select", { id: `r${i}-${f}`, disabled: !p || state.busy, onchange: e => { row[f] = e.target.value; renderCompare(); } });
+      s.add(new Option("All", ALL));
+      opts[f].forEach(o => s.add(new Option(o.label, o.value)));
+      s.value = row[f];
+      return field(s.id, label, s);
+    };
+
+    return el("div", { class: "prow", style: `border-left-color:${color}` },
+      el("div", { class: "prow-head" },
+        el("span", { class: "dot", style: `background:${color}`, "aria-hidden": "true" }),
+        el("strong", { text: `Person ${i + 1}` }),
+        multi ? el("button", {
+          type: "button", class: "icon ghost", text: "−", disabled: state.busy,
+          "aria-label": `Remove person ${i + 1}`, title: `Remove person ${i + 1}`,
+          onclick: () => { state.rows.splice(i, 1); renderCompare(); announce(`Person ${i + 1} removed.`); },
+        }) : null),
+      el("div", { class: "fields" },
+        field(nameSel.id, "Name *", nameSel, p ? null : "Name is required"),
+        filter("method", "Method"), filter("training", "Training/Learning"),
+        filter("subTopic", "Sub Topic"), filter("hours", "Learning Hours")),
+    );
+  }));
+
+  const add = $("addBtn");
+  add.disabled = state.busy || state.rows.length >= CONFIG.maxPeople;
+  add.title = state.rows.length >= CONFIG.maxPeople ? `Maximum of ${CONFIG.maxPeople} people` : "Add person";
+
+  renderBars(results.filter(r => r.p));
+  if (focusId && $(focusId)) $(focusId).focus();
+}
+
+function renderBars(results) {
+  const box = $("bars");
+  if (!results.length) { box.replaceChildren(el("p", { class: "empty", text: "Select an employee to see the comparison." })); return; }
+  const max = Math.max(CONFIG.targetHours, ...results.map(r => r.total)) * 1.1;
+  const targetLeft = (CONFIG.targetHours / max) * 100;
+  const label = (r, f) => (r.row[f] === ALL ? "All" : r.opts[f].find(o => o.value === r.row[f])?.label ?? "All");
+
+  box.replaceChildren(
+    el("p", { class: "legend", text: `Dashed line = ${fmt(CONFIG.targetHours)}-hour target. Totals below target are shown in red.` }),
+    ...results.map(r => {
+      const color = colorFor(r.i, r.total), status = statusFor(r.total);
+      const tip = [r.p.name, `Method: ${label(r, "method")}`, `Training/Learning: ${label(r, "training")}`,
+        `Sub Topic: ${label(r, "subTopic")}`, `Learning Hours: ${label(r, "hours")}`,
+        `Total: ${fmt(r.total)} hours`, status].join("\n");
+      return el("div", { class: "bar", title: tip },
+        el("div", { class: "bar-top" },
+          el("span", { class: "name" }, r.p.name, el("span", { class: "badge", style: `background:${color}`, text: status })),
+          el("span", { style: `color:${color};font-weight:600`, text: `${fmt(r.total)} h` })),
+        el("div", { class: "track", role: "img", "aria-label": `${r.p.name}: ${fmt(r.total)} hours, ${status}` },
+          el("div", { class: "fill", style: `width:${(r.total / max) * 100}%;background:${color}` }),
+          el("div", { class: "target", style: `left:${targetLeft}%` })),
+        el("div", { class: "bar-sub", text: `${r.items} learning item(s) · ${fmt(pct(r.total, CONFIG.targetHours))}% of target · overall ${fmt(r.overall)} h (${state.year === ALL ? "all years" : state.year})` }),
+      );
+    }),
+  );
+}
+
+function classify(r) {
+  for (const [type, rule] of Object.entries(CONFIG.trainingTypes)) {
+    if (rule.methods.some(m => key(m) === r.k.method)) return type;
+    if ((rule.trainingContains || []).some(w => r.k.training.includes(key(w)))) return type;
+  }
+  return OTHER_TYPE;
+}
+
+function renderTimeline() {
+  const types = ["All", ...Object.keys(CONFIG.trainingTypes).reverse()];
+  $("tlTypes").replaceChildren(...types.map(t => el("button", {
+    type: "button", class: "ghost", text: t, disabled: state.busy, "aria-pressed": String(state.tlType === t),
+    onclick: () => { state.tlType = t; renderTimeline(); },
+  })));
+
+  const q = key(state.tlSearch);
+  const years = new Map();
+  for (const r of state.recs) {
+    if (!r.hours.size) continue;
+    const type = classify(r);
+    if (state.tlType !== "All" && type !== state.tlType) continue;
+    if (q && !r.k.training.includes(q) && !r.k.subTopic.includes(q)) continue;
+    if (!years.has(r.year)) years.set(r.year, new Map());
+    const g = years.get(r.year), id = `${r.k.method}|${r.k.training}|${r.k.subTopic}`;
+    if (!g.has(id)) g.set(id, { method: r.method, training: r.training, subTopic: r.subTopic, type, people: new Set(), hours: 0 });
+    const e = g.get(id);
+    for (const [pid, h] of r.hours) { e.people.add(pid); e.hours += h; }
+  }
+
+  const box = $("timeline");
+  if (!years.size) { box.replaceChildren(el("p", { class: "empty", text: "No training records match the current filters." })); return; }
+  const order = state.model.years.filter(y => years.has(y));
+  box.replaceChildren(...order.map(y => {
+    const items = [...years.get(y).values()].sort((a, b) => b.hours - a.hours);
+    const open = state.tlOpen.has(y), limit = CONFIG.timelineCollapsedCount;
+    const hrs = items.reduce((s, e) => s + e.hours, 0);
+    return el("div", { class: "tl-year" },
+      el("h3", { text: `${y} — ${items.length} training(s) · ${fmt(hrs)} hours` }),
+      el("ul", {}, ...(open ? items : items.slice(0, limit)).map(e => el("li", { class: "tl-item" },
+        el("div", { class: "t", text: [e.training || CONFIG.blankLabel, e.subTopic].filter(Boolean).join(" · ") }),
+        el("div", { class: "s", text: `${e.method || CONFIG.blankLabel} · ${e.type}` }),
+        el("div", { class: "s", text: `${e.people.size} participant(s) · ${fmt(e.hours)} h · avg ${fmt(e.people.size ? e.hours / e.people.size : 0)} h` })))),
+      items.length > limit ? el("button", {
+        type: "button", class: "ghost", disabled: state.busy, "aria-expanded": String(open),
+        text: open ? "Show less" : `Show more (${items.length - limit})`,
+        onclick: () => { open ? state.tlOpen.delete(y) : state.tlOpen.add(y); renderTimeline(); },
+      }) : null,
+    );
+  }));
+}
+
+function renderDataQuality() {
+  const dq = state.model.dq;
+  const sections = [
+    [`Employees missing from main sheet headers`, dq.rosterMissing],
+    [`Main sheet employees not in "${CONFIG.employeeSheet}" sheet`, dq.notInRoster],
+    ["Duplicate employee names", dq.duplicates],
+    ["Invalid learning-hour values (counted as 0)", dq.invalid],
+    ["Negative hours (excluded)", dq.negative],
+    ["Formula cells without a cached value (counted as 0)", dq.noCache],
+    ["Records missing Year", dq.missingYear],
+    ["Records missing Method", dq.missingMethod],
+    ["Records missing Training/Learning", dq.missingTraining],
+    [`Training/Learning values not in "${CONFIG.trainingListSheet}" list`, dq.notInList],
+    ["Headers that could not be matched", dq.unmatchedHeaders],
+  ].filter(([, list]) => list.length);
+  const count = sections.reduce((s, [, l]) => s + l.length, 0);
+  $("dqSummary").textContent = `Data quality — ${count} warning(s), ${dq.emptyRows} empty row(s) ignored`;
+  const cap = 40;
+  $("dqBody").replaceChildren(
+    el("p", { class: "hint", text: `Rows ignored as empty (no Method, Training/Learning, Sub Topic or hours): ${dq.emptyRows}` }),
+    ...(sections.length ? sections.map(([title, list]) => [
+      el("h3", { text: `${title} (${list.length})` }),
+      el("ul", {}, ...list.slice(0, cap).map(t => el("li", { text: t })), list.length > cap ? el("li", { text: `…and ${list.length - cap} more` }) : null),
+    ]).flat() : [el("p", { class: "empty", text: "No data-quality issues found." })]),
+  );
+}
+
+/* ---------- Events ---------- */
+$("refreshBtn").addEventListener("click", load);
+$("pickBtn").addEventListener("click", pickWorkbook);
+$("fileInput").addEventListener("change", e => {
+  const f = e.target.files[0];
+  if (f) { state.source = { file: f }; load(); }
+  e.target.value = "";
+});
+$("yearSel").addEventListener("change", e => { state.year = e.target.value; state.tlOpen.clear(); renderAll(); });
+$("addBtn").addEventListener("click", () => {
+  if (state.rows.length >= CONFIG.maxPeople) return;
+  state.rows.push(newRow());
+  renderCompare();
+  $(`r${state.rows.length - 1}-p`)?.focus();
+  announce(`Person ${state.rows.length} added. Select a name.`);
+});
+let searchTimer;
+$("tlSearch").addEventListener("input", e => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { state.tlSearch = e.target.value; if (state.model) renderTimeline(); }, 200);
+});
+
+renderMeta();
+load();
+</script>
+</body>
+</html>
